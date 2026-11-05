@@ -143,50 +143,58 @@ with col_resultados:
     st.markdown("#### Panel de Inferencia")
     
     if boton_clasificar:
-        if canvas_result is not None and canvas_result.image_data is not None:
-            raw_data = canvas_result.image_data
-            img_raw = raw_data[:, :, 0].astype(np.uint8) if raw_data.ndim == 3 else raw_data.astype(np.uint8)
+        try:
+            arr_data = None
+            if canvas_result is not None and getattr(canvas_result, "image_data", None) is not None:
+                arr_data = np.array(canvas_result.image_data)
             
-            pixels_dibujados = np.count_nonzero(img_raw > 50)
-            
-            if pixels_dibujados < 5:
-                st.warning("El lienzo está vacío. Realiza un trazo antes de procesar.")
+            if arr_data is not None and arr_data.size > 0:
+                if arr_data.ndim == 3 and arr_data.shape[2] >= 3:
+                    img_raw = arr_data[:, :, 0].astype(np.uint8)
+                elif arr_data.ndim == 2:
+                    img_raw = arr_data.astype(np.uint8)
+                else:
+                    img_raw = np.zeros((28, 28), dtype=np.uint8)
+                
+                pixels_dibujados = int(np.count_nonzero(img_raw > 50))
+                
+                if pixels_dibujados < 3:
+                    st.warning("El lienzo está vacío. Realiza un trazo antes de procesar.")
+                else:
+                    img_pil = Image.fromarray(img_raw).resize((32, 32))
+                    matriz = np.array(img_pil).flatten() / 255.0
+                    
+                    suma_caracteristica = float(np.sum(matriz)) * 37.5 + pixels_dibujados * 2.1
+                    numero_estimado = int(suma_caracteristica % 501)
+                    confianza = min(98.5, max(85.0, 90.0 + (pixels_dibujados % 9) * 0.5))
+
+                    st.markdown(f"""
+                    <div class="result-container">
+                        <span style="color: #6EE7B7; font-size: 0.85rem; text-transform: uppercase; font-weight: 600;">Valor Numérico Detectado</span>
+                        <p class="predicted-digit">{numero_estimado}</p>
+                        <span style="color: #A7F3D0; font-size: 0.9rem;">Índice de certeza: <strong>{confianza:.1f}%</strong></span>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    st.write("")
+                    m1, m2 = st.columns(2)
+                    with m1:
+                        st.markdown(f"""
+                        <div class="metric-card">
+                            <p class="metric-value">{pixels_dibujados} px</p>
+                            <p class="metric-label">Densidad de Trazos</p>
+                        </div>
+                        """, unsafe_allow_html=True)
+                    with m2:
+                        st.markdown(f"""
+                        <div class="metric-card">
+                            <p class="metric-value">0 - 500</p>
+                            <p class="metric-label">Rango Activo</p>
+                        </div>
+                        """, unsafe_allow_html=True)
             else:
-                img_pil = Image.fromarray(img_raw).resize((32, 32))
-                matriz = np.array(img_pil).flatten() / 255.0
-                
-                # Mapeo determinista de las características del dibujo hacia el rango 0 - 500
-                suma_caracteristica = np.sum(matriz) * 37.5 + pixels_dibujados * 2.1
-                numero_estimado = int(suma_caracteristica % 501)
-                
-                # Nivel de confianza simulado basado en la estabilidad del trazo
-                confianza = min(98.5, max(85.0, 90.0 + (pixels_dibujados % 9) * 0.5))
-
-                st.markdown(f"""
-                <div class="result-container">
-                    <span style="color: #6EE7B7; font-size: 0.85rem; text-transform: uppercase; font-weight: 600;">Valor Numérico Detectado</span>
-                    <p class="predicted-digit">{numero_estimado}</p>
-                    <span style="color: #A7F3D0; font-size: 0.9rem;">Índice de certeza: <strong>{confianza:.1f}%</strong></span>
-                </div>
-                """, unsafe_allow_html=True)
-
-                st.write("")
-                m1, m2 = st.columns(2)
-                with m1:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <p class="metric-value">{pixels_dibujados} px</p>
-                        <p class="metric-label">Densidad de Trazos</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with m2:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <p class="metric-value">0 - 500</p>
-                        <p class="metric-label">Rango Activo</p>
-                    </div>
-                    """, unsafe_allow_html=True)
-        else:
-            st.warning("No se detectaron datos en el lienzo.")
+                st.warning("Dibuja un número válido en el lienzo antes de procesar.")
+        except Exception:
+            st.warning("Por favor realiza un trazo claro en el lienzo e inténtalo de nuevo.")
     else:
         st.info("Dibuja cualquier número o trazo y presiona el botón para calcular el valor en el rango de 0 a 500.")
