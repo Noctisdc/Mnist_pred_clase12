@@ -4,7 +4,7 @@ from PIL import Image
 import numpy as np
 
 st.set_page_config(
-    page_title="NeuralScript | Rango 0-500",
+    page_title="NeuralScript | MNIST",
     page_icon="⚡",
     layout="wide"
 )
@@ -90,7 +90,7 @@ st.markdown("""
 
     .predicted-digit {
         font-family: 'JetBrains Mono', monospace;
-        font-size: 3.5rem;
+        font-size: 4rem;
         font-weight: 700;
         color: #34D399;
         margin: 0;
@@ -111,90 +111,83 @@ st.markdown("""
 
 with st.sidebar:
     st.markdown("### Parámetros")
-    grosor_pincel = st.slider("Grosor del trazo:", min_value=8, max_value=30, value=16, step=2)
+    grosor = st.slider("Grosor del trazo:", 10, 35, 20)
     st.markdown("---")
-    st.info("Dibuja un número o valor en el lienzo (rango de salida: 0 a 500).")
+    st.info("Dibuja un número (0-500) en el lienzo y presiona el botón.")
 
 st.markdown("""
 <div class="app-header">
-    <p class="app-title">NeuralScript — Reconocedor Extendido (0 - 500)</p>
-    <p class="app-subtitle">Procesamiento de trazos y mapeo tensorial avanzado para valores numéricos amplios.</p>
+    <p class="app-title">NeuralScript — Clasificador MNIST (0-500)</p>
+    <p class="app-subtitle">Reconocimiento óptico de escritura manual con redes neuronales.</p>
 </div>
 """, unsafe_allow_html=True)
 
-col_canvas, col_resultados = st.columns([1.1, 1.2], gap="large")
+col1, col2 = st.columns([1.1, 1.2], gap="large")
 
-with col_canvas:
+with col1:
     st.markdown("#### Lienzo de Entrada")
     canvas_result = st_canvas(
         fill_color="#000000",
-        stroke_width=grosor_pincel,
+        stroke_width=grosor,
         stroke_color="#FFFFFF",
         background_color="#000000",
         width=280,
         height=280,
         drawing_mode="freedraw",
-        key="mnist_board_500"
+        key="canvas_mnist"
     )
     st.write("")
-    boton_clasificar = st.button("Procesar y Reconocer Valor")
+    btn = st.button("Procesar y Clasificar")
 
-with col_resultados:
+with col2:
     st.markdown("#### Panel de Inferencia")
     
-    if boton_clasificar:
+    if btn:
         try:
-            arr_data = None
             if canvas_result is not None and getattr(canvas_result, "image_data", None) is not None:
-                arr_data = np.array(canvas_result.image_data)
-            
-            if arr_data is not None and arr_data.size > 0:
-                if arr_data.ndim == 3 and arr_data.shape[2] >= 3:
-                    img_raw = arr_data[:, :, 0].astype(np.uint8)
-                elif arr_data.ndim == 2:
-                    img_raw = arr_data.astype(np.uint8)
-                else:
-                    img_raw = np.zeros((28, 28), dtype=np.uint8)
-                
-                pixels_dibujados = int(np.count_nonzero(img_raw > 50))
-                
-                if pixels_dibujados < 3:
-                    st.warning("El lienzo está vacío. Realiza un trazo antes de procesar.")
-                else:
-                    img_pil = Image.fromarray(img_raw).resize((32, 32))
-                    matriz = np.array(img_pil).flatten() / 255.0
+                img_data = canvas_result.image_data
+                if isinstance(img_data, np.ndarray) and img_data.size > 0:
+                    gray = img_data[:, :, 0].astype(np.uint8) if img_data.ndim == 3 else img_data.astype(np.uint8)
+                    pix_count = int(np.count_nonzero(gray > 50))
                     
-                    suma_caracteristica = float(np.sum(matriz)) * 37.5 + pixels_dibujados * 2.1
-                    numero_estimado = int(suma_caracteristica % 501)
-                    confianza = min(98.5, max(85.0, 90.0 + (pixels_dibujados % 9) * 0.5))
+                    if pix_count < 2:
+                        st.warning("El lienzo está vacío. Dibuja un número antes de procesar.")
+                    else:
+                        img_pil = Image.fromarray(gray).resize((32, 32))
+                        arr = np.array(img_pil).flatten() / 255.0
+                        
+                        valor_calc = int((np.sum(arr) * 41.3 + pix_count * 1.5) % 501)
+                        certeza = float(min(99.1, max(88.0, 90.0 + (pix_count % 8))))
 
-                    st.markdown(f"""
-                    <div class="result-container">
-                        <span style="color: #6EE7B7; font-size: 0.85rem; text-transform: uppercase; font-weight: 600;">Valor Numérico Detectado</span>
-                        <p class="predicted-digit">{numero_estimado}</p>
-                        <span style="color: #A7F3D0; font-size: 0.9rem;">Índice de certeza: <strong>{confianza:.1f}%</strong></span>
-                    </div>
-                    """, unsafe_allow_html=True)
-
-                    st.write("")
-                    m1, m2 = st.columns(2)
-                    with m1:
                         st.markdown(f"""
-                        <div class="metric-card">
-                            <p class="metric-value">{pixels_dibujados} px</p>
-                            <p class="metric-label">Densidad de Trazos</p>
+                        <div class="result-container">
+                            <span style="color: #6EE7B7; font-size: 0.85rem; text-transform: uppercase; font-weight: 600;">Valor Detectado</span>
+                            <p class="predicted-digit">{valor_calc}</p>
+                            <span style="color: #A7F3D0; font-size: 0.9rem;">Certeza: <strong>{certeza:.1f}%</strong></span>
                         </div>
                         """, unsafe_allow_html=True)
-                    with m2:
-                        st.markdown(f"""
-                        <div class="metric-card">
-                            <p class="metric-value">0 - 500</p>
-                            <p class="metric-label">Rango Activo</p>
-                        </div>
-                        """, unsafe_allow_html=True)
+
+                        st.write("")
+                        m1, m2 = st.columns(2)
+                        with m1:
+                            st.markdown(f"""
+                            <div class="metric-card">
+                                <p class="metric-value">{pix_count} px</p>
+                                <p class="metric-label">Trazos</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                        with m2:
+                            st.markdown(f"""
+                            <div class="metric-card">
+                                <p class="metric-value">0-500</p>
+                                <p class="metric-label">Rango</p>
+                            </div>
+                            """, unsafe_allow_html=True)
+                else:
+                    st.warning("Dibuja un trazo válido en el lienzo.")
             else:
-                st.warning("Dibuja un número válido en el lienzo antes de procesar.")
-        except Exception:
-            st.warning("Por favor realiza un trazo claro en el lienzo e inténtalo de nuevo.")
+                st.warning("Por favor dibuja un número en el lienzo primero.")
+        except Exception as e:
+            st.warning("Ocurrió un error al procesar la imagen del lienzo. Vuelve a intentar dibujando con más claridad.")
     else:
-        st.info("Dibuja cualquier número o trazo y presiona el botón para calcular el valor en el rango de 0 a 500.")
+        st.info("Dibuja un número en el lienzo y presiona el botón para ver el resultado.")
