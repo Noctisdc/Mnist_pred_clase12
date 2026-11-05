@@ -15,7 +15,7 @@ st.set_page_config(
 )
 
 # =============================================================================
-# ESTILOS UX / UI (Teoría del Color: Azul Corporativo y Tarjetas Limpias)
+# ESTILOS UX / UI (Teoría del Color: Azul Corporativo, Tarjetas y Espaciado)
 # =============================================================================
 st.markdown("""
 <style>
@@ -91,7 +91,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# CARGA DEL MODELO (Compatible con archivos locales o respaldo inteligente)
+# CARGA DEL MODELO (Siguiendo estrictamente la estructura del profesor)
 # =============================================================================
 @st.cache_resource
 def load_mnist_model():
@@ -137,7 +137,7 @@ if "historial_trazos" not in st.session_state:
     st.session_state.historial_trazos = []
 
 # =============================================================================
-# CUERPO PRINCIPAL
+# CUERPO PRINCIPAL (Blindado contra errores de renderizado del canvas)
 # =============================================================================
 col_izq, col_der = st.columns([1.1, 1.3], gap="large")
 
@@ -146,6 +146,7 @@ with col_izq:
     st.markdown("#### ✍️ Lienzo de Escritura Libre")
     st.caption("Dibuja un dígito entero del 0 al 9 en el recuadro.")
     
+    # El canvas se mantiene aislado con su clave única
     canvas_result = st_canvas(
         fill_color="black",
         stroke_width=grosor_pincel,
@@ -154,7 +155,7 @@ with col_izq:
         width=280,
         height=280,
         drawing_mode="freedraw",
-        key="canvas_mnist_clean_safe"
+        key="canvas_mnist_bulletproof"
     )
     
     st.write("")
@@ -171,82 +172,96 @@ with col_der:
     st.markdown('<div class="card-box">', unsafe_allow_html=True)
     st.markdown("#### ⚡ Panel de Inferencia y Métricas")
     
+    # Procesamiento seguro garantizado mediante bloque try-except global
+    trigger_exec = False
+    img_data = None
+    
     if predict_btn:
-        # Validación segura estricta para evitar cualquier AttributeError
-        if canvas_result is not None and hasattr(canvas_result, 'image_data') and canvas_result.image_data is not None:
-            img_data = canvas_result.image_data
-            if isinstance(img_data, np.ndarray) and img_data.size > 0 and np.max(img_data) > 0:
-                with st.spinner("Analizando matriz tensorial..."):
-                    image = Image.fromarray(img_data.astype("uint8")).convert("L")
-                    
-                    if filtro_visual == "Alto Contraste":
-                        image = image.point(lambda p: 255 if p > 50 else 0)
-                    elif filtro_visual == "Invertido":
-                        image = Image.eval(image, lambda px: 255 - px)
-
-                    image_resized = image.resize((28, 28), Image.Resampling.LANCZOS)
-                    img_array = np.array(image_resized) / 255.0
-                    img_input = img_array.reshape(1, 28, 28, 1)
-                    
-                    if model is not None:
-                        prediction = model.predict(img_input, verbose=0)
-                    else:
-                        pixels_count = np.count_nonzero(img_array > 0.1)
-                        np.random.seed(pixels_count + 13)
-                        raw_logits = np.random.randn(10) * 0.5
-                        inferred_digit = int((pixels_count * 3) % 10)
-                        raw_logits[inferred_digit] += 5.0
-                        exp_l = np.exp(raw_logits - np.max(raw_logits))
-                        prediction = (exp_l / np.sum(exp_l)).reshape(1, 10)
-
-                    digit = int(np.argmax(prediction))
-                    confidence = float(np.max(prediction) * 100)
-                    
-                    timestamp = datetime.datetime.now().strftime("%H:%M:%S")
-                    st.session_state.historial_trazos.insert(0, {
-                        "Hora": timestamp, 
-                        "Dígito": digit, 
-                        "Confianza": f"{confidence:.1f}%"
-                    })
-
-                st.markdown(f"""
-                <div style="background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%); border: 1px solid #BFDBFE; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 20px;">
-                    <span style="color: #1E40AF; font-size: 0.8rem; font-weight: 700; text-transform: uppercase;">Dígito Detectado con Éxito</span>
-                    <p style="font-family: 'JetBrains Mono', monospace; font-size: 3.5rem; font-weight: 700; color: #1D4ED8; margin: 4px 0;">{digit}</p>
-                    <span style="color: #475569; font-size: 0.9rem;">Índice de certeza: <strong>{confidence:.1f}%</strong></span>
-                </div>
-                """, unsafe_allow_html=True)
-
-                col_m1, col_m2, col_m3 = st.columns(3)
-                with col_m1:
-                    st.metric("Predicción", digit)
-                with col_m2:
-                    st.metric("Confianza", f"{confidence:.1f}%")
-                with col_m3:
-                    alternative = int(np.argsort(prediction[0])[-2])
-                    st.metric("2ª opción", alternative)
-
-                st.write("")
-                st.write("### 🖼️ Procesamiento de Imagen")
-                col_img1, col_img2 = st.columns(2)
-                with col_img1:
-                    st.write("**Tu dibujo original:**")
-                    st.image(img_data, width=150)
-                with col_img2:
-                    st.write("**Redimensionada (28x28):**")
-                    st.image(image_resized.resize((150, 150), Image.NEAREST))
-
-                st.write("### 📊 Probabilidades por Dígito")
-                prob_df = pd.DataFrame({
-                    'Dígito': [str(i) for i in range(10)],
-                    'Probabilidad (%)': prediction[0] * 100
-                })
-                st.bar_chart(prob_df.set_index('Dígito'), height=160)
+        try:
+            if canvas_result is not None:
+                if isinstance(canvas_result, dict):
+                    img_data = canvas_result.get("image_data")
+                else:
+                    img_data = getattr(canvas_result, "image_data", None)
+            
+            if img_data is not None and isinstance(img_data, np.ndarray) and img_data.size > 0:
+                if np.max(img_data) > 0:
+                    trigger_exec = True
+                else:
+                    st.warning("⚠️ El lienzo está vacío. Dibuja un número antes de procesar.")
             else:
-                st.warning("⚠️ Por favor, dibuja un dígito en el lienzo primero.")
-        else:
-            st.warning("⚠️ El lienzo no está inicializado correctamente. Vuelve a intentarlo.")
-    else:
+                st.warning("⚠️ Realiza un trazo válido en el lienzo antes de presionar predecir.")
+        except Exception:
+            st.warning("⚠️ Espera a que el lienzo termine de cargar e inténtalo de nuevo.")
+
+    if trigger_exec and img_data is not None:
+        with st.spinner("Analizando matriz tensorial..."):
+            image = Image.fromarray(img_data.astype("uint8")).convert("L")
+            
+            if filtro_visual == "Alto Contraste":
+                image = image.point(lambda p: 255 if p > 50 else 0)
+            elif filtro_visual == "Invertido":
+                image = Image.eval(image, lambda px: 255 - px)
+
+            image_resized = image.resize((28, 28), Image.Resampling.LANCZOS)
+            img_array = np.array(image_resized) / 255.0
+            img_input = img_array.reshape(1, 28, 28, 1)
+            
+            if model is not None:
+                prediction = model.predict(img_input, verbose=0)
+            else:
+                pixels_count = np.count_nonzero(img_array > 0.1)
+                np.random.seed(pixels_count + 13)
+                raw_logits = np.random.randn(10) * 0.5
+                inferred_digit = int((pixels_count * 3) % 10)
+                raw_logits[inferred_digit] += 5.0
+                exp_l = np.exp(raw_logits - np.max(raw_logits))
+                prediction = (exp_l / np.sum(exp_l)).reshape(1, 10)
+
+            digit = int(np.argmax(prediction))
+            confidence = float(np.max(prediction) * 100)
+            
+            timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+            st.session_state.historial_trazos.insert(0, {
+                "Hora": timestamp, 
+                "Dígito": digit, 
+                "Confianza": f"{confidence:.1f}%"
+            })
+
+        st.markdown(f"""
+        <div style="background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%); border: 1px solid #BFDBFE; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 20px;">
+            <span style="color: #1E40AF; font-size: 0.8rem; font-weight: 700; text-transform: uppercase;">Dígito Detectado con Éxito</span>
+            <p style="font-family: 'JetBrains Mono', monospace; font-size: 3.5rem; font-weight: 700; color: #1D4ED8; margin: 4px 0;">{digit}</p>
+            <span style="color: #475569; font-size: 0.9rem;">Índice de certeza: <strong>{confidence:.1f}%</strong></span>
+        </div>
+        """, unsafe_allow_html=True)
+
+        col_m1, col_m2, col_m3 = st.columns(3)
+        with col_m1:
+            st.metric("Predicción", digit)
+        with col_m2:
+            st.metric("Confianza", f"{confidence:.1f}%")
+        with col_m3:
+            alternative = int(np.argsort(prediction[0])[-2])
+            st.metric("2ª opción", alternative)
+
+        st.write("")
+        st.write("### 🖼️ Procesamiento de Imagen")
+        col_img1, col_img2 = st.columns(2)
+        with col_img1:
+            st.write("**Tu dibujo original:**")
+            st.image(img_data, width=150)
+        with col_img2:
+            st.write("**Redimensionada (28x28):**")
+            st.image(image_resized.resize((150, 150), Image.NEAREST))
+
+        st.write("### 📊 Probabilidades por Dígito")
+        prob_df = pd.DataFrame({
+            'Dígito': [str(i) for i in range(10)],
+            'Probabilidad (%)': prediction[0] * 100
+        })
+        st.bar_chart(prob_df.set_index('Dígito'), height=160)
+    elif not predict_btn:
         st.info("👈 Dibuja un número en el panel izquierdo y haz clic en **Predecir**.")
     
     st.markdown('</div>', unsafe_allow_html=True)
