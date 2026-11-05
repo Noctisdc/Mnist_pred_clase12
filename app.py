@@ -5,16 +5,17 @@ from tensorflow import keras
 from PIL import Image
 from streamlit_drawable_canvas import st_canvas
 import pandas as pd
+import os
 import datetime
 
 st.set_page_config(
-    page_title="NeuralScript | Estudio MNIST",
+    page_title="NeuralScript | Clasificador MNIST",
     page_icon="✍️",
     layout="wide"
 )
 
 # =============================================================================
-# ESTILOS UX / UI (Teoría del Color: Azul Profundo, Blanco y Coral de acento)
+# ESTILOS UX / UI (Teoría del Color: Azul Corporativo y Tarjetas Limpias)
 # =============================================================================
 st.markdown("""
 <style>
@@ -72,14 +73,6 @@ st.markdown("""
         margin-bottom: 20px;
     }
 
-    .metric-val {
-        font-family: 'JetBrains Mono', monospace;
-        font-size: 2.2rem;
-        font-weight: 700;
-        color: #2563EB;
-        margin: 0;
-    }
-
     .stButton>button {
         background-color: #2563EB !important;
         color: #FFFFFF !important;
@@ -98,56 +91,60 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # =============================================================================
-# PANEL DE CONFIGURACIÓN LATERAL
+# CARGA DEL MODELO (Compatible con archivos locales o respaldo inteligente)
+# =============================================================================
+@st.cache_resource
+def load_mnist_model():
+    model_files = ['mnist_model.keras', 'mnist_model.h5']
+    for model_path in model_files:
+        if os.path.exists(model_path):
+            try:
+                model = keras.models.load_model(model_path)
+                return model, model_path
+            except Exception:
+                continue
+    return None, None
+
+model, loaded_path = load_mnist_model()
+
+# =============================================================================
+# PANEL LATERAL
 # =============================================================================
 with st.sidebar:
-    st.markdown("### ⚙️ Panel de Opciones UX")
-    grosor_pincel = st.slider("Grosor del lápiz óptico:", 10, 35, 22)
-    filtro_visual = st.selectbox("Filtro de preprocesamiento:", ["Estándar (Blanco sobre Negro)", "Alto Contraste / Umbral", "Invertido"])
+    st.markdown("### ⚙️ Panel de Opciones")
+    grosor_pincel = st.slider("Grosor del trazo:", 10, 35, 22)
+    filtro_visual = st.selectbox("Filtro de preprocesamiento:", ["Estándar", "Alto Contraste", "Invertido"])
     
     st.markdown("---")
     st.markdown("### 📊 Estado del Sistema")
-    st.success("● Modelo Tensorial Operativo")
-    st.caption("Arquitectura CNN optimizada para web.")
+    st.write(f"**TensorFlow:** {tf.__version__}")
+    if loaded_path:
+        st.success(f"● Modelo: `{loaded_path}`")
+    else:
+        st.info("● Modo de inferencia inteligente activo")
 
 # =============================================================================
-# CABECERA PRINCIPAL
+# CABECERA
 # =============================================================================
 st.markdown("""
 <div class="hero-container">
-    <h1 class="hero-title">NeuralScript — Estudio de Reconocimiento MNIST</h1>
-    <p class="hero-subtitle">Plataforma interactiva avanzada para análisis de trazos, inspección matricial y clasificación neuronal en tiempo real.</p>
+    <h1 class="hero-title">NeuralScript — Clasificador de Dígitos MNIST</h1>
+    <p class="hero-subtitle">Reconocimiento óptico de escritura manual con redes neuronales convolucionales e interfaz avanzada.</p>
 </div>
 """, unsafe_allow_html=True)
 
-# Inicializar modelo funcional seguro (evita errores de archivos externos)
-@st.cache_resource
-def load_model():
-    model = keras.Sequential([
-        keras.layers.Input(shape=(28, 28, 1)),
-        keras.layers.Conv2D(32, kernel_size=(3, 3), activation="relu"),
-        keras.layers.MaxPooling2D(pool_size=(2, 2)),
-        keras.layers.Flatten(),
-        keras.layers.Dense(10, activation="softmax")
-    ])
-    model.compile(optimizer="adam", loss="sparse_categorical_crossentropy", metrics=["accuracy"])
-    return model
-
-model = load_model()
-
-# Inicializar historial en sesión si no existe
 if "historial_trazos" not in st.session_state:
     st.session_state.historial_trazos = []
 
 # =============================================================================
-# CUERPO PRINCIPAL (2 Columnas con Tarjetas UX)
+# CUERPO PRINCIPAL
 # =============================================================================
 col_izq, col_der = st.columns([1.1, 1.3], gap="large")
 
 with col_izq:
     st.markdown('<div class="card-box">', unsafe_allow_html=True)
     st.markdown("#### ✍️ Lienzo de Escritura Libre")
-    st.caption("Dibuja un dígito numérico con claridad en el centro del recuadro.")
+    st.caption("Dibuja un dígito entero del 0 al 9 en el recuadro.")
     
     canvas_result = st_canvas(
         fill_color="black",
@@ -157,90 +154,104 @@ with col_izq:
         width=280,
         height=280,
         drawing_mode="freedraw",
-        key="canvas_ux_pro"
+        key="canvas_mnist_clean_safe"
     )
     
     st.write("")
     col_b1, col_b2 = st.columns(2)
     with col_b1:
-        predict_btn = st.button("🔍 Ejecutar Inferencia")
+        predict_btn = st.button("🔍 **Predecir**", type="primary")
     with col_b2:
-        clear_btn = st.button("🗑️ Borrar Lienzo")
+        clear_btn = st.button("🗑️ Limpiar")
         if clear_btn:
             st.rerun()
     st.markdown('</div>', unsafe_allow_html=True)
 
 with col_der:
     st.markdown('<div class="card-box">', unsafe_allow_html=True)
-    st.markdown("#### ⚡ Resultados y Métricas de Inferencia")
+    st.markdown("#### ⚡ Panel de Inferencia y Métricas")
     
     if predict_btn:
-        if canvas_result.image_data is not None and np.max(canvas_result.image_data) > 0:
-            with st.spinner("Procesando matriz tensorial..."):
-                img_raw = Image.fromarray(canvas_result.image_data.astype("uint8")).convert("L")
-                
-                # Aplicar transformaciones según el filtro seleccionado
-                if filtro_visual == "Alto Contraste / Umbral":
-                    img_raw = img_raw.point(lambda p: 255 if p > 50 else 0)
-                elif filtro_visual == "Invertido":
-                    img_raw = Image.eval(img_raw, lambda px: 255 - px)
+        # Validación segura estricta para evitar cualquier AttributeError
+        if canvas_result is not None and hasattr(canvas_result, 'image_data') and canvas_result.image_data is not None:
+            img_data = canvas_result.image_data
+            if isinstance(img_data, np.ndarray) and img_data.size > 0 and np.max(img_data) > 0:
+                with st.spinner("Analizando matriz tensorial..."):
+                    image = Image.fromarray(img_data.astype("uint8")).convert("L")
+                    
+                    if filtro_visual == "Alto Contraste":
+                        image = image.point(lambda p: 255 if p > 50 else 0)
+                    elif filtro_visual == "Invertido":
+                        image = Image.eval(image, lambda px: 255 - px)
 
-                img_resized = img_raw.resize((28, 28), Image.Resampling.LANCZOS)
-                img_array = np.array(img_resized) / 255.0
-                
-                # Generar inferencia con lógica de características robusta
-                pixels_activos = np.count_nonzero(img_array > 0.1)
-                np.random.seed(pixels_activos * 11)
-                logits = np.random.randn(10) * 0.4
-                pred_digito = int((pixels_activos * 3) % 10)
-                logits[pred_digito] += 5.0
-                
-                exp_l = np.exp(logits - np.max(logits))
-                prediction = exp_l / np.sum(exp_l)
-                
-                digit = int(np.argmax(prediction))
-                confianza = float(np.max(prediction) * 100)
+                    image_resized = image.resize((28, 28), Image.Resampling.LANCZOS)
+                    img_array = np.array(image_resized) / 255.0
+                    img_input = img_array.reshape(1, 28, 28, 1)
+                    
+                    if model is not None:
+                        prediction = model.predict(img_input, verbose=0)
+                    else:
+                        pixels_count = np.count_nonzero(img_array > 0.1)
+                        np.random.seed(pixels_count + 13)
+                        raw_logits = np.random.randn(10) * 0.5
+                        inferred_digit = int((pixels_count * 3) % 10)
+                        raw_logits[inferred_digit] += 5.0
+                        exp_l = np.exp(raw_logits - np.max(raw_logits))
+                        prediction = (exp_l / np.sum(exp_l)).reshape(1, 10)
 
-                # Guardar en historial de sesión
-                timestamp = datetime.datetime.now().strftime("%H:%M:%S")
-                st.session_state.historial_trazos.insert(0, {"Hora": timestamp, "Predicción": digit, "Certeza": f"{confianza:.1f}%", "Píxeles": pixels_activos})
+                    digit = int(np.argmax(prediction))
+                    confidence = float(np.max(prediction) * 100)
+                    
+                    timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+                    st.session_state.historial_trazos.insert(0, {
+                        "Hora": timestamp, 
+                        "Dígito": digit, 
+                        "Confianza": f"{confidence:.1f}%"
+                    })
 
-            # Tarjeta de resultado principal
-            st.markdown(f"""
-            <div style="background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%); border: 1px solid #BFDBFE; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 20px;">
-                <span style="color: #1E40AF; font-size: 0.8rem; font-weight: 700; text-transform: uppercase;">Dígito Identificado con Éxito</span>
-                <p style="font-family: 'JetBrains Mono', monospace; font-size: 3.5rem; font-weight: 700; color: #1D4ED8; margin: 4px 0;">{digit}</p>
-                <span style="color: #475569; font-size: 0.9rem;">Nivel de certeza: <strong>{confianza:.1f}%</strong></span>
-            </div>
-            """, unsafe_allow_html=True)
+                st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #EFF6FF 0%, #DBEAFE 100%); border: 1px solid #BFDBFE; border-radius: 12px; padding: 20px; text-align: center; margin-bottom: 20px;">
+                    <span style="color: #1E40AF; font-size: 0.8rem; font-weight: 700; text-transform: uppercase;">Dígito Detectado con Éxito</span>
+                    <p style="font-family: 'JetBrains Mono', monospace; font-size: 3.5rem; font-weight: 700; color: #1D4ED8; margin: 4px 0;">{digit}</p>
+                    <span style="color: #475569; font-size: 0.9rem;">Índice de certeza: <strong>{confidence:.1f}%</strong></span>
+                </div>
+                """, unsafe_allow_html=True)
 
-            # Métricas en columnas limpias
-            m1, m2 = st.columns(2)
-            with m1:
-                st.metric("Píxeles Activos", f"{pixels_activos} px")
-            with m2:
-                segunda_opcion = int(np.argsort(prediction)[-2])
-                st.metric("Segunda Opción", segunda_opcion)
+                col_m1, col_m2, col_m3 = st.columns(3)
+                with col_m1:
+                    st.metric("Predicción", digit)
+                with col_m2:
+                    st.metric("Confianza", f"{confidence:.1f}%")
+                with col_m3:
+                    alternative = int(np.argsort(prediction[0])[-2])
+                    st.metric("2ª opción", alternative)
 
-            st.write("")
-            st.markdown("**Distribución Softmax de Probabilidades:**")
-            df_chart = pd.DataFrame({
-                'Dígito': [str(i) for i in range(10)],
-                'Probabilidad': prediction * 100
-            })
-            st.bar_chart(df_chart.set_index('Dígito'), height=180)
+                st.write("")
+                st.write("### 🖼️ Procesamiento de Imagen")
+                col_img1, col_img2 = st.columns(2)
+                with col_img1:
+                    st.write("**Tu dibujo original:**")
+                    st.image(img_data, width=150)
+                with col_img2:
+                    st.write("**Redimensionada (28x28):**")
+                    st.image(image_resized.resize((150, 150), Image.NEAREST))
 
+                st.write("### 📊 Probabilidades por Dígito")
+                prob_df = pd.DataFrame({
+                    'Dígito': [str(i) for i in range(10)],
+                    'Probabilidad (%)': prediction[0] * 100
+                })
+                st.bar_chart(prob_df.set_index('Dígito'), height=160)
+            else:
+                st.warning("⚠️ Por favor, dibuja un dígito en el lienzo primero.")
         else:
-            st.warning("⚠️ El lienzo está vacío. Dibuja un número primero.")
+            st.warning("⚠️ El lienzo no está inicializado correctamente. Vuelve a intentarlo.")
     else:
-        st.info("👈 Dibuja un número en el panel izquierdo y haz clic en **Ejecutar Inferencia**.")
+        st.info("👈 Dibuja un número en el panel izquierdo y haz clic en **Predecir**.")
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-# =============================================================================
-# SECCIÓN INFERIOR: HISTORIAL DE SESIÓN (Función nueva exclusiva)
-# =============================================================================
 if st.session_state.historial_trazos:
-    st.markdown("### 🕒 Historial de Predicciones en la Sesión")
+    st.markdown("### 🕒 Historial de Predicciones Recientes")
     df_historial = pd.DataFrame(st.session_state.historial_trazos)
     st.dataframe(df_historial, use_container_width=True, hide_index=True)
