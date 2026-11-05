@@ -144,15 +144,16 @@ with col_resultados:
     
     if boton_clasificar:
         if canvas_result.image_data is not None:
-            try:
-                img_raw = canvas_result.image_data[:, :, 0].astype(np.uint8)
+            raw_data = canvas_result.image_data
+            if isinstance(raw_data, np.ndarray) and raw_data.size > 0:
+                img_raw = raw_data[:, :, 0].astype(np.uint8)
                 img_pil = Image.fromarray(img_raw).resize((28, 28))
                 
                 matriz_pixeles = np.array(img_pil).flatten() / 255.0
                 densidad_trazo = float(np.sum(matriz_pixeles))
                 
                 if densidad_trazo < 1.5:
-                    st.warning("El lienzo está vacío. Dibuja un número.")
+                    st.warning("El lienzo está vacío. Dibuja un número antes de clasificar.")
                 else:
                     semilla_activa = densidad_trazo * 13.5
                     logits = np.sin(np.arange(10) * semilla_activa * 0.2) * 2.5
@@ -190,9 +191,9 @@ with col_resultados:
                     st.write("")
                     st.markdown("**Distribución Softmax:**")
                     st.bar_chart(probs)
-            except Exception:
-                st.error("Error procesando la imagen. Vuelve a intentarlo.")
+            else:
+                st.warning("Dibuja un dígito válido en el lienzo.")
         else:
-            st.warning("Dibuja un dígito en el lienzo.")
+            st.warning("El lienzo no ha generado datos aún. Vuelve a dibujar.")
     else:
         st.info("Dibuja un número y presiona el botón para clasificar.")
